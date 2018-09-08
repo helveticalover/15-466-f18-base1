@@ -45,8 +45,11 @@ struct CratesMode : public Mode {
 	Scene scene;
 	Scene::Camera *camera = nullptr;
 
-	Scene::Object *large_crate = nullptr;
-	Scene::Object *small_crate = nullptr;
+    std::map< int, Scene::Transform * > transform_dict;
+    Scene::Object *player = nullptr;
+//	Scene::Object *large_crate = nullptr;
+//	Scene::Object *small_crate = nullptr;
+//	Scene::Object *cage_floor = nullptr;
 
 	//when this reaches zero, the 'dot' sample is triggered at the small crate:
 	float dot_countdown = 1.0f;
