@@ -23,7 +23,7 @@
 #include <glm/gtx/string_cast.hpp>
 
 Load< WalkMesh > walk_mesh(LoadTagDefault, [](){
-   	return new WalkMesh(data_path("test-walk.pnc"));
+   	return new WalkMesh(data_path("phone-bank-walk.pnc"));
 });
 
 Load< MeshBuffer > crates_meshes(LoadTagDefault, [](){
@@ -112,11 +112,13 @@ CratesMode::CratesMode() {
             }
 
             Scene::Transform *transform_struct = construct_transforms(entry.transform_ref);
-            /*Scene::Object *object = */attach_object(transform_struct, meshName);
-//            if (meshName == "Player") {
-//                player = object;
-//                glm::vec3 start_position = glm::vec3(100,100,0);
-//            }
+            Scene::Object *object = attach_object(transform_struct, meshName);
+            if (meshName == "Player") {
+                player = object;
+                glm::vec3 start_position = player->transform->position;
+                wp = walk_mesh->start(start_position);
+                player->transform->position = walk_mesh->world_point(wp);
+            }
         }
 
 //	    //build some sort of content:
@@ -140,18 +142,9 @@ CratesMode::CratesMode() {
 	{ //Camera looking at the origin:
 		Scene::Transform *transform = scene.new_transform();
 		transform->position = glm::vec3(0.0f, 0.0f, 2.5f);
-//		transform->set_parent(player->transform);
+		transform->set_parent(player->transform);
 		//Cameras look along -z, so rotate view to look at origin:
 		transform->rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-
-        glm::vec3 start_position = glm::vec3(0.0f, 0.0f, 2.0f);
-        wp = walk_mesh->start(start_position);
-        transform->position = walk_mesh->world_point(wp);
-//		std::cout << glm::to_string(transform->position) << " " << glm::to_string(wp.triangle) << " " << glm::to_string(wp.weights) << std::endl;
-
-//		walk_mesh->walk(wp, glm::vec3(1,1,1));
-//		transform->position = walk_mesh->world_point(wp);
-//		std::cout << glm::to_string(transform->position) << " " << glm::to_string(wp.triangle) << " " << glm::to_string(wp.weights) << std::endl;
 
 		camera = scene.new_camera(transform);
 	}
@@ -222,10 +215,6 @@ bool CratesMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_siz
 void CratesMode::update(float elapsed) {
 	glm::mat3 directions = glm::mat3_cast(camera->transform->rotation);
 	float amt = 5.0f * elapsed;
-//	if (controls.right) player->transform->position += amt * directions[0];
-//	if (controls.left) player->transform->position -= amt * directions[0];
-//	if (controls.backward) player->transform->position += amt * directions[2];
-//	if (controls.forward) player->transform->position -= amt * directions[2];
 
     glm::vec3 step = glm::vec3(0,0,0);
     if (controls.right) step = amt * directions[0];
@@ -235,7 +224,7 @@ void CratesMode::update(float elapsed) {
 
 	if (step != glm::vec3(0,0,0)) {
         walk_mesh->walk(wp, step);
-        camera->transform->position = walk_mesh->world_point(wp);
+        player->transform->position = walk_mesh->world_point(wp);
 	}
 
 //	{ //set sound positions:

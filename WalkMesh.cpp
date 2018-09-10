@@ -114,7 +114,7 @@ void WalkMesh::walk(WalkPoint &wp, glm::vec3 const &step) const {
         glm::uvec2 edge = glm::uvec2(0,0);  //offset
         // cross triangle edge -- push point against edge or vertex
 
-        glm::vec3 prev_weights = new_weights;
+//        glm::vec3 prev_weights = new_weights;
         if (new_weights.x <= 0) {
             float scale = 1.0f - new_weights.x;
             new_weights = glm::vec3(0.0f, new_weights.y / scale, new_weights.z / scale);
