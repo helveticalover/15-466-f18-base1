@@ -69,6 +69,7 @@ NAMES =
 	MeshBuffer
 	draw_text
 	Sound
+	WalkMesh
 	;
 
 if $(OS) = NT {

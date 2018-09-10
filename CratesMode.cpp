@@ -4,6 +4,7 @@
 #include "Load.hpp"
 #include "Sound.hpp"
 #include "MeshBuffer.hpp"
+#include "WalkMesh.hpp"
 #include "gl_errors.hpp" //helper for dumpping OpenGL error messages
 #include "read_chunk.hpp" //helper for reading a vector of structures from a file
 #include "data_path.hpp" //helper to get paths relative to executable
@@ -17,6 +18,13 @@
 #include <map>
 #include <cstddef>
 #include <random>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/string_cast.hpp>
+
+Load< WalkMesh > walk_mesh(LoadTagDefault, [](){
+   	return new WalkMesh(data_path("test-walk.pnc"));
+});
 
 Load< MeshBuffer > crates_meshes(LoadTagDefault, [](){
 	return new MeshBuffer(data_path("phone-bank.pnc"));
@@ -50,8 +58,8 @@ CratesMode::CratesMode() {
 		return object;
 	};
 
-	{
-        std::ifstream file("phone-bank.scene", std::ios::binary);
+    {
+        std::ifstream file(data_path("phone-bank.scene"), std::ios::binary);
 
         std::vector< char > strings;
         read_chunk(file, "str0", &strings);
@@ -104,11 +112,11 @@ CratesMode::CratesMode() {
             }
 
             Scene::Transform *transform_struct = construct_transforms(entry.transform_ref);
-            Scene::Object *object = attach_object(transform_struct, meshName);
-            if (meshName == "Player") {
-                player = object;
-            }
-
+            /*Scene::Object *object = */attach_object(transform_struct, meshName);
+//            if (meshName == "Player") {
+//                player = object;
+//                glm::vec3 start_position = glm::vec3(100,100,0);
+//            }
         }
 
 //	    //build some sort of content:
@@ -127,15 +135,24 @@ CratesMode::CratesMode() {
 //		transform2->position = glm::vec3(0.0f, 0.0f, 1.5f);
 //		transform2->scale = glm::vec3(0.5f);
 //		small_crate = attach_object(transform2, "Crate");
-
-	}
+    }
 
 	{ //Camera looking at the origin:
 		Scene::Transform *transform = scene.new_transform();
 		transform->position = glm::vec3(0.0f, 0.0f, 2.5f);
-		transform->set_parent(player->transform);
+//		transform->set_parent(player->transform);
 		//Cameras look along -z, so rotate view to look at origin:
 		transform->rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+        glm::vec3 start_position = glm::vec3(0.0f, 0.0f, 2.0f);
+        wp = walk_mesh->start(start_position);
+        transform->position = walk_mesh->world_point(wp);
+//		std::cout << glm::to_string(transform->position) << " " << glm::to_string(wp.triangle) << " " << glm::to_string(wp.weights) << std::endl;
+
+//		walk_mesh->walk(wp, glm::vec3(1,1,1));
+//		transform->position = walk_mesh->world_point(wp);
+//		std::cout << glm::to_string(transform->position) << " " << glm::to_string(wp.triangle) << " " << glm::to_string(wp.weights) << std::endl;
+
 		camera = scene.new_camera(transform);
 	}
 	
@@ -205,10 +222,21 @@ bool CratesMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_siz
 void CratesMode::update(float elapsed) {
 	glm::mat3 directions = glm::mat3_cast(camera->transform->rotation);
 	float amt = 5.0f * elapsed;
-	if (controls.right) player->transform->position += amt * directions[0];
-	if (controls.left) player->transform->position -= amt * directions[0];
-	if (controls.backward) player->transform->position += amt * directions[2];
-	if (controls.forward) player->transform->position -= amt * directions[2];
+//	if (controls.right) player->transform->position += amt * directions[0];
+//	if (controls.left) player->transform->position -= amt * directions[0];
+//	if (controls.backward) player->transform->position += amt * directions[2];
+//	if (controls.forward) player->transform->position -= amt * directions[2];
+
+    glm::vec3 step = glm::vec3(0,0,0);
+    if (controls.right) step = amt * directions[0];
+	if (controls.left) step = -amt * directions[0];
+	if (controls.backward) step = amt * directions[2];
+	if (controls.forward) step = -amt * directions[2];
+
+	if (step != glm::vec3(0,0,0)) {
+        walk_mesh->walk(wp, step);
+        camera->transform->position = walk_mesh->world_point(wp);
+	}
 
 //	{ //set sound positions:
 //		glm::mat4 cam_to_world = camera->transform->make_local_to_world();

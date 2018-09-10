@@ -1,30 +1,31 @@
 #pragma once
 
+#include "GL.hpp"
+#include "MeshBuffer.hpp"
+
 #include <vector>
 #include <unordered_map>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp> //allows the use of 'uvec2' as an unordered_map key
 
+struct WalkPoint {
+    glm::uvec3 triangle = glm::uvec3(-1U); //indices of current triangle
+    glm::vec3 weights = glm::vec3(std::numeric_limits< float >::quiet_NaN()); //barycentric coordinates for current point
+};
+
 struct WalkMesh {
-	//Walk mesh will keep track of triangles, vertices:
-	std::vector< glm::vec3 > vertices;
-	std::vector< glm::uvec3 > triangles; //CCW-oriented
-
-	//TODO: consider also loading vertex normals for interpolated "up" direction:
-	//std::vector< glm::vec3 > vertex_normals;
-
-	//This "next vertex" map includes [a,b]->c, [b,c]->a, and [c,a]->b for each triangle, and is useful for checking what's over an edge from a given point:
-	std::unordered_map< glm::uvec2, uint32_t > next_vertex;
-
 
 	//Construct new WalkMesh and build next_vertex structure:
-	WalkMesh(std::vector< glm::vec3 > const &vertices_, std::vector< glm::uvec3 > const &triangles_);
+	WalkMesh(std::string const &filename);
 
-	struct WalkPoint {
-		glm::uvec3 triangle = glm::uvec3(-1U); //indices of current triangle
-		glm::vec3 weights = glm::vec3(std::numeric_limits< float >::quiet_NaN()); //barycentric coordinates for current point
-	};
+    //Walk mesh will keep track of triangles, vertices:
+    std::vector< glm::vec3 > vertices;
+    std::vector< glm::uvec3 > triangles; //CCW-oriented
+    std::vector< glm::vec3 > vertex_normals;
+
+    //This "next vertex" map includes [a,b]->c, [b,c]->a, and [c,a]->b for each triangle, and is useful for checking what's over an edge from a given point:
+    std::unordered_map< glm::uvec2, uint32_t > next_vertex;
 
 	//used to initialize walking -- finds the closest point on the walk mesh:
 	// (should only need to call this at the start of a level)
@@ -34,20 +35,19 @@ struct WalkMesh {
 	void walk(WalkPoint &wp, glm::vec3 const &step) const;
 
 	//used to read back results of walking:
-	glm::vec3 world_point(WalkPoint const &wp) const {
-		return wp.weights.x * vertices[wp.triangle.x]
-		     + wp.weights.y * vertices[wp.triangle.y]
-		     + wp.weights.z * vertices[wp.triangle.z];
+	glm::vec3 world_point(WalkPoint &walk_point) const {
+		return walk_point.weights.x * vertices[walk_point.triangle.x]
+		     + walk_point.weights.y * vertices[walk_point.triangle.y]
+		     + walk_point.weights.z * vertices[walk_point.triangle.z];
 	}
 
-	glm::vec3 world_normal(WalkPoint const &wp) const {
+	glm::vec3 world_normal(WalkPoint &walk_point) const {
 		//TODO: could interpolate vertex_normals instead of computing the triangle normal:
 		return glm::normalize(glm::cross(
-			vertices[wp.triangle.y] - vertices[wp.triangle.x],
-			vertices[wp.triangle.z] - vertices[wp.triangle.x]
+			vertices[walk_point.triangle.y] - vertices[walk_point.triangle.x],
+			vertices[walk_point.triangle.z] - vertices[walk_point.triangle.x]
 		));
 	}
-
 };
 
 /*
@@ -85,3 +85,4 @@ Game::update(float elapsed) {
 	player_right = glm::cross(player_forward, player_up);
 
 }
+*/

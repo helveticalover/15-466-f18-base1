@@ -153,7 +153,12 @@ for obj in bpy.data.objects:
 		#write the mesh triangles:
 		for poly in mesh.polygons:
 			assert(len(poly.loop_indices) == 3)
+
+			#TODO: assign mesh name to triangle and start vertex
+			triangles += struct.pack('I', name_begin);
+			triangles += struct.pack('I', name_end);
 			triangles += struct.pack('I', vertex_count);
+
 			for i in range(0,3):
 				assert(mesh.loops[poly.loop_indices[i]].vertex_index == poly.vertices[i])
 				loop = mesh.loops[poly.loop_indices[i]]
@@ -175,7 +180,7 @@ for obj in bpy.data.objects:
 						data += struct.pack('ff', uv.x, uv.y)
 					else:
 						data += struct.pack('ff', 0, 0)
-			vertex_count += 3
+		vertex_count += len(mesh.polygons) * 3
 	else:
 		#write the mesh edges:
 		for edge in mesh.edges:
