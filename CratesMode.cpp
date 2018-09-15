@@ -115,9 +115,17 @@ CratesMode::CratesMode() {
             Scene::Object *object = attach_object(transform_struct, meshName);
             if (meshName == "Player") {
                 player = object;
-                glm::vec3 start_position = player->transform->position;
-                wp = walk_mesh->start(start_position);
-                player->transform->position = walk_mesh->world_point(wp);
+                player_group = scene.new_transform();
+                player_group->position = player->transform->position;
+                player_group->rotation = player->transform->position;
+                player_group->set_parent(player->transform->parent);
+
+                player->transform->position = glm::vec3(0.0f, 0.0f, 0.0f);
+                player->transform->rotation = glm::quat();
+                player->transform->set_parent(player_group);
+
+                wp = walk_mesh->start(player_group->position);
+                player_group->position = walk_mesh->world_point(wp);
             }
         }
 
@@ -139,12 +147,13 @@ CratesMode::CratesMode() {
 //		small_crate = attach_object(transform2, "Crate");
     }
 
-	{ //Camera looking at the origin:
+	{
+	    //Camera looking at the origin:
 		Scene::Transform *transform = scene.new_transform();
 		transform->position = glm::vec3(0.0f, 0.0f, 2.5f);
-		transform->set_parent(player->transform);
 		//Cameras look along -z, so rotate view to look at origin:
-		transform->rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		transform->rotation = default_axis;
+//		transform->set_parent(player_group);
 
 		camera = scene.new_camera(transform);
 	}
@@ -178,6 +187,23 @@ bool CratesMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_siz
 			return true;
 		}
 	}
+
+	if (evt.type == SDL_KEYDOWN || evt.type == SDL_KEYUP) {
+		if (evt.key.keysym.scancode == SDL_SCANCODE_LEFT) {
+			camera_controls.move_left = (evt.type == SDL_KEYDOWN);
+			return true;
+		} else if (evt.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
+			camera_controls.move_right = (evt.type == SDL_KEYDOWN);
+			return true;
+		} else if (evt.key.keysym.scancode == SDL_SCANCODE_UP) {
+			camera_controls.move_forward = (evt.type == SDL_KEYDOWN);
+			return true;
+		} else if (evt.key.keysym.scancode == SDL_SCANCODE_DOWN) {
+            camera_controls.move_backward = (evt.type == SDL_KEYDOWN);
+            return true;
+        }
+	}
+
 	//handle tracking the mouse for rotation control:
 	if (!mouse_captured) {
 		if (evt.type == SDL_KEYDOWN && evt.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
@@ -196,16 +222,22 @@ bool CratesMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_siz
 			return true;
 		}
 		if (evt.type == SDL_MOUSEMOTION) {
-			//Note: float(window_size.y) * camera->fovy is a pixels-to-radians conversion factor
+//			Note: float(window_size.y) * camera->fovy is a pixels-to-radians conversion factor
 			float yaw = evt.motion.xrel / float(window_size.y) * camera->fovy;
 			float pitch = evt.motion.yrel / float(window_size.y) * camera->fovy;
 			yaw = -yaw;
 			pitch = -pitch;
+			azimuth += yaw;
+			elevation += pitch;
+
+			elevation = glm::clamp(elevation, glm::radians(-60.0f), glm::radians(60.0f));
+
 			camera->transform->rotation = glm::normalize(
-				camera->transform->rotation
-				* glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f))
-				* glm::angleAxis(pitch, glm::vec3(1.0f, 0.0f, 0.0f))
+				default_axis
+				* glm::angleAxis(azimuth, glm::vec3(0.0f, 1.0f, 0.0f))
+				* glm::angleAxis(elevation, glm::vec3(1.0f, 0.0f, 0.0f))
 			);
+			player->transform->rotation = glm::normalize(glm::angleAxis(azimuth, glm::vec3(0.0f, 0.0f, 1.0f)));
 			return true;
 		}
 	}
@@ -213,19 +245,29 @@ bool CratesMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_siz
 }
 
 void CratesMode::update(float elapsed) {
-	glm::mat3 directions = glm::mat3_cast(camera->transform->rotation);
-	float amt = 5.0f * elapsed;
+	glm::mat3 directions = glm::mat3_cast(/*player_group->rotation */ camera->transform->rotation);
 
+//	std::cout << "right " + glm::to_string(directions[0]) + " forward " + glm::to_string(-1.0f * directions[2]) +
+//	" up " + glm::to_string(player_normal) << std::endl;
+
+	float amt = 5.0f * elapsed;
     glm::vec3 step = glm::vec3(0,0,0);
-    if (controls.right) step = amt * directions[0];
-	if (controls.left) step = -amt * directions[0];
-	if (controls.backward) step = amt * directions[2];
-	if (controls.forward) step = -amt * directions[2];
+    if (controls.right) step += amt * directions[0];
+	if (controls.left) step += -amt * directions[0];
+	if (controls.backward) step += amt * directions[2];
+	if (controls.forward) step += -amt * directions[2];
 
 	if (step != glm::vec3(0,0,0)) {
         walk_mesh->walk(wp, step);
-        player->transform->position = walk_mesh->world_point(wp);
+        player_group->position = walk_mesh->world_point(wp);
 	}
+
+	if (camera_controls.move_right) camera->transform->position += amt * directions[0];
+	if (camera_controls.move_left) camera->transform->position += -amt * directions[0];
+	if (camera_controls.move_backward) camera->transform->position += amt * directions[2];
+	if (camera_controls.move_forward) camera->transform->position += -amt * directions[2];
+
+	//https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
 
 //	{ //set sound positions:
 //		glm::mat4 cam_to_world = camera->transform->make_local_to_world();

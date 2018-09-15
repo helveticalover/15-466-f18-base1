@@ -3,7 +3,7 @@
 #based on 'export-sprites.py' and 'glsprite.py' from TCHOW Rainbow; code used is released into the public domain.
 
 #Note: Script meant to be executed from within blender, as per:
-#blender --background --python export-navmesh.py -- <infile.blend>[:layer] <outfile.p[n][c][t]>
+#blender --background --python export-meshes.py -- <infile.blend>[:layer] <outfile.p[n][c][t]>
 
 import sys,re
 

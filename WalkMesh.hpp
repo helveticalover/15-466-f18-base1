@@ -42,11 +42,10 @@ struct WalkMesh {
 	}
 
 	glm::vec3 world_normal(WalkPoint &walk_point) const {
-		//TODO: could interpolate vertex_normals instead of computing the triangle normal:
-		return glm::normalize(glm::cross(
-			vertices[walk_point.triangle.y] - vertices[walk_point.triangle.x],
-			vertices[walk_point.triangle.z] - vertices[walk_point.triangle.x]
-		));
+		return glm::normalize(
+			vertex_normals[walk_point.triangle.x] * walk_point.weights.x +
+			vertex_normals[walk_point.triangle.y] * walk_point.weights.y +
+			vertex_normals[walk_point.triangle.z] * walk_point.weights.z);
 	}
 };
 

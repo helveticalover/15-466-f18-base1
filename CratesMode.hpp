@@ -39,6 +39,22 @@ struct CratesMode : public Mode {
 		bool right = false;
 	} controls;
 
+	struct {
+	    bool up = false;
+	    bool down = false;
+	    bool left = false;
+	    bool right = false;
+	    bool move_forward = false;
+	    bool move_backward = false;
+	    bool move_left = false;
+	    bool move_right = false;
+	} camera_controls;
+
+	//looking down -y
+	glm::quat const default_axis = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	float azimuth = 0;
+	float elevation = 0;
+
 	bool mouse_captured = false;
 
 	Scene scene;
@@ -46,12 +62,16 @@ struct CratesMode : public Mode {
 
     std::map< int, Scene::Transform * > transform_dict;
     Scene::Object *player = nullptr;
-//	Scene::Object *large_crate = nullptr;
-//	Scene::Object *small_crate = nullptr;
-//	Scene::Object *cage_floor = nullptr;
     Scene::Object *walk = nullptr;
 
     WalkPoint wp;
+    Scene::Transform *player_group;
+    glm::vec3 player_normal = glm::vec3(0.0f, 0.0f, 1.0f);
+    glm::quat player_twist = glm::quat(); //rotation on axis (0,0,1)
+
+    glm::vec3 const player_up = glm::vec3(0.0f, 0.0f, 1.0f);
+    glm::vec3 const player_forward = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 const player_right = glm::vec3(1.0f, 0.0f, 0.0f);
 
 	//when this reaches zero, the 'dot' sample is triggered at the small crate:
 	float dot_countdown = 1.0f;
