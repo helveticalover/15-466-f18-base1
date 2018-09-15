@@ -12,6 +12,7 @@
 #define VERTEX_OFFSET 0.001f
 
 static glm::vec3 closest_point_on_triangle(glm::vec3 x, glm::vec3 y, glm::vec3 z, glm::vec3 p);
+//static glm::vec3 project_point_on_plane(glm::vec3 x, glm::vec3 y, glm::vec3 z, glm::vec3 p);
 static glm::vec3 world_to_barycentric(glm::vec3 x, glm::vec3 y, glm::vec3 z, glm::vec3 p);
 static glm::vec3 barycentric_to_world(glm::vec3 x, glm::vec3 y, glm::vec3 z, glm::vec3 p);
 
@@ -111,21 +112,17 @@ void WalkMesh::walk(WalkPoint &wp, glm::vec3 const &step) const {
         glm::vec3 z = vertices[wp.triangle.z];
 
         // Offset vertices to adjacent edge
-        bool is_vertex = false;
         if (wp.weights.x == 1.0f) {
             wp.weights.x -= VERTEX_OFFSET;
             wp.weights.y += VERTEX_OFFSET;
-            is_vertex = true;
         }
         if (wp.weights.y == 1.0f) {
             wp.weights.y -= VERTEX_OFFSET;
             wp.weights.z += VERTEX_OFFSET;
-            is_vertex = true;
         }
         if (wp.weights.z == 1.0f) {
             wp.weights.z -= VERTEX_OFFSET;
             wp.weights.x += VERTEX_OFFSET;
-            is_vertex = true;
         }
 
         glm::vec3 bary_step_end = world_to_barycentric(x, y, z, world_point(wp) + current_step);
@@ -158,13 +155,14 @@ void WalkMesh::walk(WalkPoint &wp, glm::vec3 const &step) const {
         distance_to_travel = (1.0f - t_final) * distance_to_travel;
 
         if (bary_end.x < 0.0f || bary_end.y < 0.0f || bary_end.z < 0.0f) {
-            std::cout << "INVALID WEIGHTS" << std::endl;
-            std::cout << glm::to_string(bary_step) + " " + std::to_string(t_final) << std::endl;
-            std::cout << std::to_string(tx) + " " + std::to_string(ty) + " " + std::to_string(tz) << std::endl;
+//            std::cout << "INVALID WEIGHTS" << std::endl;
+//            std::cout << glm::to_string(bary_step) + " " + std::to_string(t_final) << std::endl;
+//            std::cout << std::to_string(tx) + " " + std::to_string(ty) + " " + std::to_string(tz) << std::endl;
+            break;
         }
 
         if (distance_to_travel == 0.0f) {
-            std::cout << "NORMAL" << std::endl;
+//            std::cout << "NORMAL" << std::endl;
             wp.weights = bary_end;
         } else {
             // Find next triangle if against edge and still have distance to travel
@@ -199,9 +197,9 @@ void WalkMesh::walk(WalkPoint &wp, glm::vec3 const &step) const {
 
             if (new_triangle == wp.triangle) {
                 // Slide along edge components
-                std::cout << "SLIDE" << std::endl;
+//                std::cout << "SLIDE" << std::endl;
 
-                if (is_vertex || !valid_edges.size()) {
+                if (bary_end.x >= 1.0f || bary_end.y >= 1.0f || bary_end.z >= 1.0f || !valid_edges.size()) {
                     wp.weights = bary_end;
                     break;
                 }
@@ -212,26 +210,25 @@ void WalkMesh::walk(WalkPoint &wp, glm::vec3 const &step) const {
                 glm::vec3 new_step = barycentric_to_world(x, y, z, bary_step_end - bary_end);
                 glm::vec3 from = glm::normalize(new_step);
                 glm::vec3 to = glm::normalize(v2 - v1);
-                float angle = glm::dot(from, to);
-
-                if (angle == 0.0f || std::isnan(angle)) {
-                    wp.weights = bary_end;
-                    break;
-                }
-                angle = angle < 0.0f ? -angle : angle;
+                float dot = glm::dot(from, to);
+                float angle = dot < 0.0f ? glm::acos(dot) - M_PI : glm::acos(dot);
                 glm::vec3 axis = glm::normalize(glm::cross(from, to));
                 glm::quat rotate = glm::angleAxis(angle, axis);
 
-                std::cout << glm::to_string(current_step) + " ";
+                if (std::isnan(rotate.x)) {
+                    wp.weights = bary_end;
+                    break;
+                }
+
+//                std::cout << glm::to_string(current_step) + " ";
                 current_step = glm::mat3_cast(rotate) * new_step;
-                std::cout << glm::to_string(current_step) << std::endl;
+//                std::cout << glm::to_string(current_step) << std::endl;
 
             } else {
                 // Go to next triangle
                 glm::vec3 new_weights = glm::vec3(0.0f, 0.0f, 0.0f);
                 new_weights.x = *(&bary_end.x + final_offset.x);
                 new_weights.y = *(&bary_end.x + final_offset.y);
-
 
                 wp.weights = new_weights;
                 wp.triangle = new_triangle;
@@ -240,21 +237,25 @@ void WalkMesh::walk(WalkPoint &wp, glm::vec3 const &step) const {
                 glm::vec3 from = glm::normalize(step);
                 glm::vec3 to = glm::normalize(new_step);
                 glm::vec3 axis = glm::normalize(glm::cross(from, to));
-                float angle = glm::dot(from, to);
-                glm::quat rotate = glm::angleAxis(angle, axis);
+                float dot = glm::dot(from, to);
+                glm::quat rotate = glm::angleAxis(glm::acos(dot), axis);
 
-                std::cout << glm::to_string(current_step) + " ";
-                current_step = glm::mat3_cast(rotate) * new_step;
-                std::cout << glm::to_string(current_step) << std::endl;
+//                std::cout << glm::to_string(current_step) + " ";
+                if (std::isnan(rotate.x)) {
+                    current_step = new_step;
+                } else {
+                    current_step = glm::mat3_cast(rotate) * new_step;
+                }
 
-                std::cout << "NEXT TRIANGLE" << std::endl;
+//                std::cout << glm::to_string(current_step) << std::endl;
+//                std::cout << "NEXT TRIANGLE" << std::endl;
 //                std::cout << glm::to_string(wp.triangle) + " " + glm::to_string(new_triangle) << std::endl;
 //                std::cout << glm::to_string(wp.weights) + " ";
             }
         }
 
-        std::cout << glm::to_string(wp.weights) << std::endl;
-        std::cout << std::endl;
+//        std::cout << glm::to_string(wp.weights) << std::endl;
+//        std::cout << std::endl;
 //        assert(wp.weights.x <= 1.0f && wp.weights.y <= 1.0f && wp.weights.z <= 1.0f &&
 //            wp.weights.x >= -0.0f && wp.weights.y >= 0.0f && wp.weights.z >= 0.0f);
 

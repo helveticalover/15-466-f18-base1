@@ -18,6 +18,7 @@
 #include <map>
 #include <cstddef>
 #include <random>
+#include <algorithm>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/string_cast.hpp>
@@ -86,9 +87,9 @@ CratesMode::CratesMode() {
             new_transform->scale = glm::vec3(transform->scl_x, transform->scl_y, transform->scl_z);
             new_transform->parent = transform->parent_ref < 0 ? nullptr : construct_transforms(transform->parent_ref);
 
-            if (!(transform->obj_name_begin <= transform->obj_name_end && transform->obj_name_end <= strings.size())) {
-                throw std::runtime_error("object scene entry has out-of-range name begin/end");
-            }
+//            if (!(transform->obj_name_begin <= transform->obj_name_end && transform->obj_name_end <= strings.size())) {
+//                throw std::runtime_error("object scene entry has out-of-range name begin/end");
+//            }
 
             transform_dict[ref] = new_transform;
             return new_transform;
@@ -101,6 +102,7 @@ CratesMode::CratesMode() {
         std::vector< MeshData > sceneObjects;
         read_chunk(file, "msh0", &sceneObjects);
 
+        uint32_t num_phones = 0;
         for (auto const &entry : sceneObjects) {
             if (!(entry.name_begin <= entry.name_end && entry.name_end <= strings.size())) {
                 throw std::runtime_error("mesh scene entry has out-of-range name begin/end");
@@ -111,8 +113,20 @@ CratesMode::CratesMode() {
                 throw std::runtime_error("mesh scene entry has out of range transform ref");
             }
 
-            Scene::Transform *transform_struct = construct_transforms(entry.transform_ref);
-            Scene::Object *object = attach_object(transform_struct, meshName);
+            if (meshName == "Phone_Flash") {
+                continue;
+			}
+
+			Scene::Transform *transform_struct = construct_transforms(entry.transform_ref);
+			Scene::Object *object = attach_object(transform_struct, meshName);
+
+			if (meshName == "Phone") {
+				PhoneData *phone = phone_list[num_phones];
+				phone->phone_object = object;
+				phone->identifier = num_phones;
+				++num_phones;
+			}
+
             if (meshName == "Player") {
                 player = object;
                 player_group = scene.new_transform();
@@ -128,23 +142,9 @@ CratesMode::CratesMode() {
                 player_group->position = walk_mesh->world_point(wp);
             }
         }
-
-//	    //build some sort of content:
-//		//cage floor:
-//		Scene::Transform *transform0 = scene.new_transform();
-//		transform0->position = glm::vec3(0.0f, 0.0f, 0.0f);
-//		cage_floor = attach_object(transform0, "CageFloor");
-//		//Crate at the origin:
-//		Scene::Transform *transform1 = scene.new_transform();
-//		transform1->set_parent(transform0);
-//		transform1->position = glm::vec3(0.0f, 0.0f, 0.0f);
-//		large_crate = attach_object(transform1, "Crate");
-//		//smaller crate on top:
-//		Scene::Transform *transform2 = scene.new_transform();
-//		transform2->set_parent(transform1);
-//		transform2->position = glm::vec3(0.0f, 0.0f, 1.5f);
-//		transform2->scale = glm::vec3(0.5f);
-//		small_crate = attach_object(transform2, "Crate");
+        assert(phone_list.size() == 4);
+        phone_state.next_phone = phone_list[3];
+        phone_state.last_phone = phone_list[3];
     }
 
 	{
@@ -153,11 +153,11 @@ CratesMode::CratesMode() {
 		transform->position = glm::vec3(0.0f, 0.0f, 2.5f);
 		//Cameras look along -z, so rotate view to look at origin:
 		transform->rotation = default_axis;
-//		transform->set_parent(player_group);
+		transform->set_parent(player_group);
 
 		camera = scene.new_camera(transform);
 	}
-	
+
 	//start the 'loop' sample playing at the large crate:
 //	loop = sample_loop->play(large_crate->transform->position, 1.0f, Sound::Loop);
 }
@@ -245,10 +245,67 @@ bool CratesMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_siz
 }
 
 void CratesMode::update(float elapsed) {
-	glm::mat3 directions = glm::mat3_cast(/*player_group->rotation */ camera->transform->rotation);
 
-//	std::cout << "right " + glm::to_string(directions[0]) + " forward " + glm::to_string(-1.0f * directions[2]) +
-//	" up " + glm::to_string(player_normal) << std::endl;
+    auto ring_phone = [&](PhoneData *phone) {
+        phone_state.next_phone->is_active = true;
+        //	PLAY SOUND HERE
+    };
+
+    //CHECK FOR INTERACTION WITH PHONE
+
+	phone_state.time_since_last_ring += elapsed;
+	std::vector< PhoneData * > valid_phones;
+	for (PhoneData *phone : phone_list) {
+
+	    phone->last_ring += elapsed;
+
+	    if (phone->is_active &&  phone->last_ring > RING_DURATION) {
+            std::cout << "MISSED PHONE: " << std::to_string(phone->identifier) << std::endl;
+	        phone->is_active = false;
+	        ++strikes;
+	    }
+
+		if (phone->is_active) {
+			MeshBuffer::Mesh const &mesh = crates_meshes->lookup("Phone_Flash");
+			phone->phone_object->start = mesh.start;
+			phone->phone_object->count = mesh.count;
+		} else {
+			MeshBuffer::Mesh const &mesh = crates_meshes->lookup("Phone");
+			phone->phone_object->start = mesh.start;
+			phone->phone_object->count = mesh.count;
+		}
+
+		if (phone->last_ring > TIME_BETWEEN_RINGS_PHONE || phone->last_ring == -1.0f) {
+			valid_phones.emplace_back(phone);
+		}
+	}
+
+	if (phone_state.next_phone == nullptr && valid_phones.size()) {
+		phone_state.next_phone = valid_phones[rand()%valid_phones.size()];
+	}
+
+	if (phone_state.time_since_last_ring > TIME_BETWEEN_RINGS_GLOBAL && phone_state.next_phone != nullptr) {
+		phone_state.next_phone->last_ring = 0.0f;
+		phone_state.time_since_last_ring = 0.0f;
+        phone_state.last_phone = phone_state.next_phone;
+
+		ring_phone(phone_state.last_phone);
+
+        std::cout << "RINGING PHONE: " << std::to_string(phone_state.last_phone->identifier) << std::endl;
+
+        valid_phones.erase(std::remove(valid_phones.begin(), valid_phones.end(), phone_state.last_phone),
+                valid_phones.end());
+
+		if (!valid_phones.size()) {
+			phone_state.next_phone = nullptr;
+		} else {
+			phone_state.next_phone = valid_phones[rand()%valid_phones.size()];
+		}
+	}
+
+	//========================================================
+
+    glm::mat3 directions = glm::mat3_cast(player_group->rotation * camera->transform->rotation);
 
 	float amt = 5.0f * elapsed;
     glm::vec3 step = glm::vec3(0,0,0);
@@ -262,10 +319,29 @@ void CratesMode::update(float elapsed) {
         player_group->position = walk_mesh->world_point(wp);
 	}
 
-	if (camera_controls.move_right) camera->transform->position += amt * directions[0];
-	if (camera_controls.move_left) camera->transform->position += -amt * directions[0];
-	if (camera_controls.move_backward) camera->transform->position += amt * directions[2];
-	if (camera_controls.move_forward) camera->transform->position += -amt * directions[2];
+//	if (camera_controls.move_right) camera->transform->position += amt * directions[0];
+//	if (camera_controls.move_left) camera->transform->position += -amt * directions[0];
+//	if (camera_controls.move_backward) camera->transform->position += amt * directions[2];
+//	if (camera_controls.move_forward) camera->transform->position += -amt * directions[2];
+
+	glm::vec3 target_normal = walk_mesh->world_normal(wp);
+
+	if (target_normal != player_normal) {
+        glm::vec3 from = player_normal;
+        glm::vec3 to = target_normal;
+        glm::vec3 axis = glm::normalize(glm::cross(from, to));
+        float dot = glm::dot(from, to);
+        glm::quat rotation = glm::angleAxis(glm::acos(dot), axis);
+
+        if (std::isnan(rotation.x)) {
+            return;
+        }
+
+        player_normal = target_normal;
+		player_forward = glm::mat3_cast(rotation) * player_forward;
+
+        player_group->rotation *= glm::normalize(rotation);
+	}
 
 	//https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
 

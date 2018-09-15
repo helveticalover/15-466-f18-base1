@@ -11,6 +11,8 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <vector>
+#include <random>
+#include <cstddef>
 
 // The 'CratesMode' shows scene with some crates in it:
 
@@ -62,16 +64,38 @@ struct CratesMode : public Mode {
 
     std::map< int, Scene::Transform * > transform_dict;
     Scene::Object *player = nullptr;
-    Scene::Object *walk = nullptr;
 
     WalkPoint wp;
     Scene::Transform *player_group;
     glm::vec3 player_normal = glm::vec3(0.0f, 0.0f, 1.0f);
-    glm::quat player_twist = glm::quat(); //rotation on axis (0,0,1)
+    glm::vec3 player_forward = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    glm::vec3 const player_up = glm::vec3(0.0f, 0.0f, 1.0f);
-    glm::vec3 const player_forward = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 const player_right = glm::vec3(1.0f, 0.0f, 0.0f);
+    struct PhoneData {
+        Scene::Object *phone_object;
+        bool is_active = false;
+        bool picked_up = false;
+        float last_ring = -1.0f;
+        uint32_t identifier = 0;
+    };
+
+    PhoneData phone1;
+    PhoneData phone2;
+    PhoneData phone3;
+    PhoneData phone4;
+    std::vector< PhoneData * > const phone_list = {&phone1, &phone2, &phone3, &phone4};
+
+    struct {
+        float time_since_last_ring = 0.0f;
+        PhoneData *last_phone = nullptr;
+        PhoneData *next_phone = nullptr;
+    } phone_state;
+
+    float const TIME_BETWEEN_RINGS_GLOBAL = 10.0f;
+    float const TIME_BETWEEN_RINGS_PHONE = 20.0f;
+    float const PICKUP_BONUS_TIME = 10.0f;
+    float const RING_DURATION = 15.0f;
+
+    uint32_t strikes = 0;
 
 	//when this reaches zero, the 'dot' sample is triggered at the small crate:
 	float dot_countdown = 1.0f;
