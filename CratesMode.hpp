@@ -14,6 +14,13 @@
 #include <random>
 #include <cstddef>
 
+static float const TIME_BETWEEN_RINGS_GLOBAL = 5.0f;
+static float const TIME_BETWEEN_RINGS_PHONE = 20.0f;
+static float const RING_DURATION = 15.0f;
+
+static float const INTERACT_RADIUS = 2.5f;
+static float const INTERACT_DOT = 0.8f;
+
 // The 'CratesMode' shows scene with some crates in it:
 
 struct CratesMode : public Mode {
@@ -39,18 +46,8 @@ struct CratesMode : public Mode {
 		bool backward = false;
 		bool left = false;
 		bool right = false;
+		bool try_interact = false;
 	} controls;
-
-	struct {
-	    bool up = false;
-	    bool down = false;
-	    bool left = false;
-	    bool right = false;
-	    bool move_forward = false;
-	    bool move_backward = false;
-	    bool move_left = false;
-	    bool move_right = false;
-	} camera_controls;
 
 	//looking down -y
 	glm::quat const default_axis = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
@@ -68,13 +65,14 @@ struct CratesMode : public Mode {
     WalkPoint wp;
     Scene::Transform *player_group;
     glm::vec3 player_normal = glm::vec3(0.0f, 0.0f, 1.0f);
-    glm::vec3 player_forward = glm::vec3(0.0f, 1.0f, 0.0f);
+//    glm::vec3 player_forward = glm::vec3(0.0f, 1.0f, 0.0f);
 
     struct PhoneData {
         Scene::Object *phone_object;
         bool is_active = false;
-        bool picked_up = false;
+        bool can_interact = false;
         float last_ring = -1.0f;
+        float phone_delay = TIME_BETWEEN_RINGS_PHONE;
         uint32_t identifier = 0;
     };
 
@@ -83,19 +81,24 @@ struct CratesMode : public Mode {
     PhoneData phone3;
     PhoneData phone4;
     std::vector< PhoneData * > const phone_list = {&phone1, &phone2, &phone3, &phone4};
+    std::vector< PhoneData * > interact_list;
 
     struct {
-        float time_since_last_ring = 0.0f;
+        float time_since_last_ring = 2.0f;;
         PhoneData *last_phone = nullptr;
         PhoneData *next_phone = nullptr;
     } phone_state;
 
-    float const TIME_BETWEEN_RINGS_GLOBAL = 10.0f;
-    float const TIME_BETWEEN_RINGS_PHONE = 20.0f;
-    float const PICKUP_BONUS_TIME = 10.0f;
-    float const RING_DURATION = 15.0f;
+//    uint32_t max_active = 1;
+//    uint32_t num_active = 0;
+    float global_delay = TIME_BETWEEN_RINGS_GLOBAL;
 
     uint32_t strikes = 0;
+    uint32_t merit = 0;
+    uint32_t last_mission = 0;
+
+    bool speaking = false;
+    bool mission = false;
 
 	//when this reaches zero, the 'dot' sample is triggered at the small crate:
 	float dot_countdown = 1.0f;
@@ -103,5 +106,10 @@ struct CratesMode : public Mode {
 	//this 'loop' sample is played at the large crate:
 	std::shared_ptr< Sound::PlayingSample > loop;
 
-//	WalkPoint wp;
+	std::shared_ptr< Sound::PlayingSample > ringing1;
+	std::shared_ptr< Sound::PlayingSample > ringing2;
+	std::shared_ptr< Sound::PlayingSample > ringing3;
+	std::shared_ptr< Sound::PlayingSample > ringing4;
+
+	std::vector< std::shared_ptr< Sound::PlayingSample >> ringings = {ringing1, ringing2, ringing3, ringing4};
 };
