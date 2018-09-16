@@ -200,7 +200,7 @@ bool CratesMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_siz
 	}
 
 	//handle tracking the state of WSAD for movement control:
-	if (evt.type == SDL_KEYDOWN || evt.type == SDL_KEYUP) {
+	if ((evt.type == SDL_KEYDOWN || evt.type == SDL_KEYUP) && (!try_mission || !evt.key.repeat)) {
 		if (evt.key.keysym.scancode == SDL_SCANCODE_W) {
 			controls.forward = (evt.type == SDL_KEYDOWN);
 			return true;
@@ -216,8 +216,8 @@ bool CratesMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_siz
 		}
 	}
 
-    if (evt.type == SDL_KEYDOWN && evt.key.keysym.scancode == SDL_SCANCODE_SPACE) {
-        speaking = false;
+    if ((evt.type == SDL_KEYDOWN || evt.type == SDL_KEYUP) && evt.key.keysym.scancode == SDL_SCANCODE_SPACE) {
+    	controls.select = (evt.type == SDL_KEYDOWN);
     }
 
 	//	handle tracking the mouse for rotation control:
@@ -266,6 +266,8 @@ bool CratesMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_siz
 
 void CratesMode::update(float elapsed) {
 
+	//=============================== MOVEMENT =====================================
+
     glm::mat3 directions = glm::mat3_cast(player_group->rotation * camera->transform->rotation);
 
     if (!speaking) {
@@ -297,7 +299,6 @@ void CratesMode::update(float elapsed) {
             glm::quat rotation = glm::angleAxis(glm::acos(dot), axis);
 
             if (std::isnan(std::acos(dot)) || std::isnan(rotation.x)) {
-                std::cout << dot << std::endl;
                 return;
             }
 
@@ -306,7 +307,7 @@ void CratesMode::update(float elapsed) {
         }
     }
 
-    //==========================================================================
+    //=============================== HELPERS =====================================
 
     glm::mat4 cam_to_world = camera->transform->make_local_to_world();
     Sound::listener.set_position( cam_to_world[3] );
@@ -315,9 +316,7 @@ void CratesMode::update(float elapsed) {
 
     // Helpers to handle phone behavior
     auto ring_phone = [&](PhoneData *phone) {
-        std::cout << "RINGING PHONE: " << std::to_string(phone_state.last_phone->identifier) << std::endl;
         phone->is_active = true;
-//        ++num_active;
 
         switch (phone->identifier) {
             case 0:
@@ -375,25 +374,31 @@ void CratesMode::update(float elapsed) {
     };
 
     auto pickup_phone = [&](PhoneData *phone) {
-        std::cout << "PICKUP PHONE" << std::endl;
-        stop_phone(phone);
-
         speaking = true;
-//        if (last_mission >= 2) {
-//            float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-//            float denom = 6.0f - (float)(glm::min(last_mission, 5.0f));
-//            mission = r < 1.0f / denom;
-//        }
+		phone_speaking_to = phone;
+
+		stop_phone(phone);
 
         phone->phone_delay = TIME_BETWEEN_RINGS_PHONE;
         global_delay = TIME_BETWEEN_RINGS_GLOBAL;
-
         glm::mat4x3 phone_to_world = phone->phone_object->transform->make_local_to_world();
         sample_hangup->play( phone_to_world * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 2.0f, Sound::Once );
-        ++merit;
+
+		if (!mission) {
+			// Possibly get assigned a mission
+			mission = last_mission >= 2 && !phone_list[0]->is_active && phone != phone_list[1];
+			if (mission) {
+				last_mission = 0;
+				codeword = rand() % codewords_list.size();
+			}
+		}
+
+		if (!mission) {
+            ++merit;
+            ++last_mission;
+        }
     };
 
-	// Handle interaction
 	auto can_interact = [&](PhoneData *phone) -> bool {
 		glm::vec3 x = walk_mesh->vertices[wp.triangle.x];
 		glm::vec3 y = walk_mesh->vertices[wp.triangle.y];
@@ -401,7 +406,7 @@ void CratesMode::update(float elapsed) {
 		glm::vec3 player_to_phone = project_on_plane(x, y, z, phone->phone_object->transform->position)
 									- player_group->position;
 		float distance = glm::length(player_to_phone);
-		glm::mat4 cam_to_world = camera->transform->make_local_to_world();
+		glm::mat4 cam_to_world = glm::mat4_cast(player_group->rotation * camera->transform->rotation);
 
 		glm::vec3 player_forward = project_on_plane(x, y, z, -cam_to_world[2]);
 		player_forward = project_on_plane(x, y, z, player_forward);
@@ -410,19 +415,57 @@ void CratesMode::update(float elapsed) {
 		return distance <= INTERACT_RADIUS && dot >= INTERACT_DOT;
 	};
 
+	//=============================== UPDATE GAME =====================================
+
 	interact_list.clear();
 	for (PhoneData *phone : phone_list) {
 		if (can_interact(phone)) {
-            phone->can_interact = phone->is_active;
-            if (phone->can_interact && controls.try_interact) {
-                pickup_phone(phone);
-            }
+			phone->can_interact = phone->is_active || (mission && phone == phone_list[1]);
+			if (mission && phone == phone_list[1] && controls.try_interact) {
+				try_mission = true;
+				speaking = true;
+				phone_speaking_to = phone;
+			} else if (phone->is_active && controls.try_interact && !speaking) {
+				pickup_phone(phone);
+			}
 		} else {
-		    phone->can_interact = false;
+			phone->can_interact = false;
 		}
 	}
 
-    // Phone ringing logic
+	// Handle menu mode
+	if (speaking) {
+		if (!try_mission) {
+			if (controls.select) {
+				speaking = false;
+				glm::mat4x3 phone_to_world = phone_speaking_to->phone_object->transform->make_local_to_world();
+				sample_hangup->play( phone_to_world * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 2.0f, Sound::Once );
+			}
+		} else {
+			if (controls.backward) ++selected_codeword;
+			if (controls.forward) --selected_codeword;
+
+			if (selected_codeword > codewords_list.size()) selected_codeword = codewords_list.size()-1;
+
+			if (controls.select) {
+				if (codeword == selected_codeword) {
+					++merit;
+				} else {
+					++strikes;
+					glm::mat4x3 phone_to_world = phone_speaking_to->phone_object->transform->make_local_to_world();
+					sample_tone->play( phone_to_world * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 2.0f, Sound::Once );
+				}
+				mission = false;
+				speaking = false;
+				try_mission = false;
+				last_mission = 0;
+
+				glm::mat4x3 phone_to_world = phone_speaking_to->phone_object->transform->make_local_to_world();
+				sample_hangup->play( phone_to_world * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 2.0f, Sound::Once );
+			}
+		}
+	}
+
 	phone_state.time_since_last_ring += elapsed;
 	std::vector< PhoneData * > valid_phones;
 	for (PhoneData *phone : phone_list) {
@@ -455,8 +498,8 @@ void CratesMode::update(float elapsed) {
 		phone_state.next_phone = valid_phones[rand()%valid_phones.size()];
 	}
 
-	if (phone_state.time_since_last_ring > global_delay && phone_state.next_phone != nullptr
-		/*&& num_active < max_active*/) {
+	// Ring next phone
+	if (phone_state.time_since_last_ring > global_delay && phone_state.next_phone != nullptr && !mission) {
 		phone_state.next_phone->last_ring = 0.0f;
 		phone_state.time_since_last_ring = 0.0f;
         phone_state.last_phone = phone_state.next_phone;
@@ -499,15 +542,36 @@ void CratesMode::draw(glm::uvec2 const &drawable_size) {
 		std::string message;
 
 		if (speaking) {
-		    if (!mission) {
-		        std::string speech = "JUST CHECKING IN";
-				float height = 0.08f;
-                GLint viewport[4];
-                glGetIntegerv(GL_VIEWPORT, viewport);
-                float aspect = viewport[2] / float(viewport[3]);
-				draw_text(speech, glm::vec2(-aspect + 0.1f, 0.9f - height), height, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+            float height = 0.08f;
+            GLint viewport[4];
+            glGetIntegerv(GL_VIEWPORT, viewport);
+            float aspect = viewport[2] / float(viewport[3]);
+		    if (!try_mission && !mission) {
+		        std::string prompt = "JUST CHECKING IN";
+				message = "SPACE TO CONTINUE";
+                draw_text(prompt, glm::vec2(-aspect + 0.1f, 0.9f - height), height, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+		    } else if (!try_mission && mission){
+				std::string prompt1 = "SAY " + codewords_list[codeword] + " TO THE PHONE";
+				std::string prompt2 = "ON THE FAR PLATFORM";
+				message = "SPACE TO CONTINUE";
+                draw_text(prompt1, glm::vec2(-aspect + 0.1f, 0.9f - height), height, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+                draw_text(prompt2, glm::vec2(-aspect + 0.1f, 0.9f - 2*height - 0.05f), height, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+			} else {
+		    	std::string prompt = "SAY";
+                draw_text(prompt, glm::vec2(-aspect + 0.1f, 0.9f - height), height, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+
+                for (uint32_t i = 0; i < codewords_list.size(); ++i) {
+                    std::string preamble = i == selected_codeword ? "*" : " ";
+                    std::string option = preamble + codewords_list[i];
+
+                    draw_text(option, glm::vec2(-aspect + 0.2f, 0.9f - (i+2) * height - ((i+1) * 0.05f)),
+                            height, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+                }
+
+		    	message = "SPACE TO SELECT";
+
 		    }
-			message = "SPACE TO CONTINUE";
+
 		} else if (mouse_captured) {
 			message = "WASD MOVE * LEFT CLICK INTERACT";
 		} else {

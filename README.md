@@ -1,27 +1,29 @@
 # Game Information
 (Note: fill in this portion with information about your game.)
 
-Title: (TODO: your game's title)
+Title: Another Infinite Night at the Orbital Phone Bank
 
-Author: (TODO: your name)
+Author: Yitong (Tiffany) Li
 
-Design Document: [TODO: name of design document](TODO: link to design document)
+Design Document: Another Infinite Night at the Orbital Phone Bank (http://graphics.cs.cmu.edu/courses/15-466-f18/game1-designs/default/)
 
 Screen Shot:
 
-![Screen Shot](screenshot.png)
+![Screen Shot](game1.png)
 
 How To Play:
 
-TODO: describe the controls and (if needed) goals/strategy.
+Pick up as many phones as possible. Move with WASD and pick up phones with LMB. When given a prompt, use WASD to select options and SPACE to advance.
 
 Changes From The Design Document:
 
-TODO: what did you need to add/remove/modify from the original design? Why?
+I was unable to implement the win state/lose state and the HUD associated with it because I ran out of time. I also simplified the instruction logic to only call one phone.
 
 Good / Bad / Ugly Code:
 
-TODO: provide examples of code you wrote from this project that you think is good (elegant, simple, useful), bad (hack-y, brittle, unreadable), and ugly (particularly inelegant). Provide a sentence or two of justification for the examples.
+1. The update function is hard to read and inelegant. It uses many conditionals to decide which phone should ring, when, and whether the phone should give an instruction.
+2. I never quite resolved rotation edge cases where the dot product is 1 or -1. When the game gets into a bad state, the camera's rotation values stop being updated, which also breaks my interaction detection algorithms because I use the player's field of view in these calculations. This can be sometimes be resolved by walking back onto a curved path.
+3. Switching between instructions and check-ins is particuarly ugly. I did not have time to account for a few cases.
 
 # Using This Base Code
 

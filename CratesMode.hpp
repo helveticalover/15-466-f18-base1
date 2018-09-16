@@ -14,8 +14,8 @@
 #include <random>
 #include <cstddef>
 
-static float const TIME_BETWEEN_RINGS_GLOBAL = 5.0f;
-static float const TIME_BETWEEN_RINGS_PHONE = 20.0f;
+static float const TIME_BETWEEN_RINGS_GLOBAL = 8.0f;
+static float const TIME_BETWEEN_RINGS_PHONE = 25.0f;
 static float const RING_DURATION = 15.0f;
 
 static float const INTERACT_RADIUS = 2.5f;
@@ -47,6 +47,7 @@ struct CratesMode : public Mode {
 		bool left = false;
 		bool right = false;
 		bool try_interact = false;
+		bool select = false;
 	} controls;
 
 	//looking down -y
@@ -72,7 +73,7 @@ struct CratesMode : public Mode {
         bool is_active = false;
         bool can_interact = false;
         float last_ring = -1.0f;
-        float phone_delay = TIME_BETWEEN_RINGS_PHONE;
+        float phone_delay = -1.0f;
         uint32_t identifier = 0;
     };
 
@@ -95,10 +96,16 @@ struct CratesMode : public Mode {
 
     uint32_t strikes = 0;
     uint32_t merit = 0;
-    uint32_t last_mission = 0;
 
+    PhoneData *phone_speaking_to = nullptr;
     bool speaking = false;
     bool mission = false;
+    bool try_mission = false;
+
+    uint32_t last_mission = 0;
+    uint32_t codeword = -1;
+    uint32_t selected_codeword = 0;
+    std::vector< std::string > const codewords_list = {"HERON", "DOG", "FISH", "MONKEY", "BIRD"};
 
 	//when this reaches zero, the 'dot' sample is triggered at the small crate:
 	float dot_countdown = 1.0f;
